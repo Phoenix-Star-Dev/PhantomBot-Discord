@@ -1,6 +1,6 @@
 const { Connection, PublicKey } = require("@solana/web3.js");
 const { getWallet } = require("../../db");
-
+const LAMPORTS_PER_SOL = 1000000000;
 module.exports = {
   async execute(interaction) {
     const discordId = interaction.user.id;

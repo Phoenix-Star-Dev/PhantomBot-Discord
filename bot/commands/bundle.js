@@ -1,5 +1,6 @@
 const { Connection, Transaction, SystemProgram } = require("@solana/web3.js");
 const { getWallet } = require("../../db");
+const LAMPORTS_PER_SOL = 1000000000;
 
 module.exports = {
   async execute(interaction) {
