@@ -18,15 +18,19 @@ async function saveWallet(discordId, publicKey) {
 }
 
 async function getWallet(discordId) {
-  const { data, error } = await supabase
-    .from("users")
-    .select("public_key")
-    .eq("discord_id", discordId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("public_key")
+      .eq("discord_id", discordId)
+      .single();
 
-  if (error && error.code !== "PGRST116") throw error;
-
-  return data ? data.public_key : null;
+    if (error && error.code !== "PGRST116") throw error;
+    return data?.public_key || null;
+  } catch (err) {
+    console.error("DB Error:", err);
+    return null;
+  }
 }
 
 module.exports = { saveWallet, getWallet };

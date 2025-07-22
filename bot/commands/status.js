@@ -1,22 +1,27 @@
 const { Connection, PublicKey } = require("@solana/web3.js");
+const { MessageFlags } = require("discord.js");
 const { getWallet } = require("../../db");
 
 module.exports = {
   async execute(interaction) {
-    const discordId = interaction.user.id;
-    const userPublicKey = await getWallet(discordId);
-
-    if (!userPublicKey) {
-      return interaction.reply({
-        content: "❌ Connect your wallet first with `/connect`",
-        ephemeral: true,
-      });
-    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
+      const discordId = interaction.user.id;
+      const walletAddress = await getWallet(discordId);
+
+      if (!walletAddress) {
+        return interaction.editReply({
+          content: "❌ Connect your wallet first with `/connect`",
+        });
+      }
+
+      const publicKey = new PublicKey(walletAddress);
       const connection = new Connection(process.env.SOLANA_RPC);
+
+      // Fetch last 3 transactions
       const signatures = await connection.getConfirmedSignaturesForAddress2(
-        new PublicKey(userPublicKey),
+        publicKey,
         { limit: 3 }
       );
 
@@ -25,23 +30,22 @@ module.exports = {
           ? signatures
               .map(
                 (sig, i) =>
-                  `${i + 1}. [${sig.signature.slice(0, 6)}...] (Slot: ${
-                    sig.slot
-                  })`
+                  `${i + 1}. [\`${sig.signature.slice(
+                    0,
+                    8
+                  )}...\`](https://explorer.solana.com/tx/${sig.signature})`
               )
               .join("\n")
           : "No recent transactions found";
 
-      await interaction.reply({
-        content: `⏳ Transaction Status for \`${userPublicKey.slice(0, 6)}...\`:
+      await interaction.editReply({
+        content: `⏳ **Transaction History**:
 ${statusMessage}`,
-        ephemeral: true,
       });
     } catch (error) {
-      console.error(error);
-      await interaction.reply({
+      console.error("Status Error:", error);
+      await interaction.editReply({
         content: "⚠️ Failed to fetch transaction history",
-        ephemeral: true,
       });
     }
   },

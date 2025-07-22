@@ -28,22 +28,31 @@ client.once("ready", () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
+// In your main bot index.js
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  const commandName = interaction.commandName;
   try {
-    const command = require(path.resolve(
-      __dirname,
-      "commands",
-      `${commandName}.js`
-    ));
+    const command = require(`./commands/${interaction.commandName}.js`);
     await command.execute(interaction);
   } catch (error) {
     console.error(error);
-    await interaction.reply({
-      content: "⚠️ There was an error executing this command.",
-      ephemeral: true,
-    });
+
+    // Check if already replied
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "⚠️ There was an error executing this command.",
+        ephemeral: true,
+      });
+    } else {
+      // If already replied, try editing
+      try {
+        await interaction.editReply({
+          content: "⚠️ There was an error executing this command.",
+        });
+      } catch (editError) {
+        console.error("EditReply failed:", editError);
+      }
+    }
   }
 });

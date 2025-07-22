@@ -1,29 +1,34 @@
-const { getWallet } = require("../../db");
-const { publicKey: dappEncryptionPublicKey } = require("../../phantomKeyPair");
+const { PublicKey } = require("@solana/web3.js");
+const { MessageFlags } = require("discord.js");
+const { getWallet, saveWallet } = require("../../db");
+const { publicKey: dappPublicKey } = require("../../phantomKeyPair");
 
 module.exports = {
   async execute(interaction) {
-    const discordId = interaction.user.id;
-    const existingPublicKey = await getWallet(discordId);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    if (existingPublicKey) {
-      return interaction.reply({
-        content: `🔗 Already connected: \`${existingPublicKey}\``,
-        ephemeral: true,
+    try {
+      const discordId = interaction.user.id;
+      const existingWallet = await getWallet(discordId);
+
+      // Check if already connected
+      if (existingWallet) {
+        return interaction.editReply({
+          content: `🔗 Already connected: \`${existingWallet}\``,
+        });
+      }
+
+      // Generate connect URL (mobile/desktop logic from earlier)
+      const connectUrl = `${process.env.SERVER_URL}/phantom/connect?discord_id=${discordId}`;
+
+      await interaction.editReply({
+        content: `[Click here to connect your Phantom Wallet](${connectUrl})`,
+      });
+    } catch (error) {
+      console.error("Connect Error:", error);
+      await interaction.editReply({
+        content: "⚠️ Failed to initiate wallet connection",
       });
     }
-
-    const connectUrl = `${process.env.SERVER_URL}/phantom/auto-connect?discord_id=${discordId}`;
-
-    await interaction.reply({
-      content: `Connecting wallet...`,
-      ephemeral: true,
-    });
-
-    // This will open in a new tab automatically in most browsers
-    interaction.followUp({
-      content: `[Complete connection](${connectUrl})`,
-      ephemeral: true,
-    });
   },
 };
