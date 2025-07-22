@@ -12,6 +12,8 @@ const {
   LAMPORTS_PER_SOL,
   Connection,
   SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
 } = require("@solana/web3.js");
 const { getWallet } = require("../../db");
 
@@ -22,7 +24,6 @@ const MIN_SOL_AMOUNT = 0.001;
 module.exports = {
   async execute(interaction) {
     try {
-      // Verify wallet connection first
       const wallet = await getWallet(interaction.user.id);
       if (!wallet) {
         return await interaction.reply({
@@ -40,15 +41,13 @@ module.exports = {
         .setLabel("Recipient Solana Address")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
-        .setMaxLength(44)
-        .setPlaceholder("Eg: 5FHwkrdxntdK24hgQU8qgBjn35Y1zwhz1GZwCkP2UJnM");
+        .setMaxLength(44);
 
       const amountInput = new TextInputBuilder()
         .setCustomId("solAmount")
         .setLabel(`Amount (SOL) - Max ${MAX_SOL_AMOUNT} SOL`)
         .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setPlaceholder(`0.1 - ${MAX_SOL_AMOUNT}`);
+        .setRequired(true);
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(recipientInput),
@@ -59,8 +58,7 @@ module.exports = {
     } catch (error) {
       console.error("Modal Initialization Error:", error);
       await interaction.reply({
-        content:
-          "🔧 Failed to initialize transaction form. Please try again later.",
+        content: "🔧 Failed to initialize transaction form",
         ephemeral: true,
       });
     }
@@ -70,7 +68,7 @@ module.exports = {
     try {
       await interaction.deferReply({ ephemeral: true });
 
-      // 1. Validate and parse inputs
+      // 1. Parse and validate inputs
       const recipientAddress = interaction.fields
         .getTextInputValue("recipientAddress")
         .trim();
@@ -78,66 +76,54 @@ module.exports = {
         interaction.fields.getTextInputValue("solAmount").replace(/,/g, "")
       );
 
-      if (isNaN(solAmount) || !isFinite(solAmount)) {
-        throw new Error("INVALID_AMOUNT");
-      }
+      if (isNaN(solAmount)) throw new Error("INVALID_AMOUNT");
+      if (solAmount < MIN_SOL_AMOUNT) throw new Error("AMOUNT_TOO_SMALL");
+      if (solAmount > MAX_SOL_AMOUNT) throw new Error("AMOUNT_TOO_LARGE");
 
-      if (solAmount < MIN_SOL_AMOUNT) {
-        throw new Error("AMOUNT_TOO_SMALL");
-      }
+      // 2. Validate addresses
+      const recipient = new PublicKey(recipientAddress);
+      const sender = new PublicKey(await getWallet(interaction.user.id));
+      if (recipient.equals(sender)) throw new Error("SELF_TRANSFER");
 
-      if (solAmount > MAX_SOL_AMOUNT) {
-        throw new Error("AMOUNT_TOO_LARGE");
-      }
-
-      // 2. Validate wallet addresses
-      let recipient, sender;
-      try {
-        recipient = new PublicKey(recipientAddress);
-        sender = new PublicKey(await getWallet(interaction.user.id));
-      } catch (e) {
-        throw new Error("INVALID_ADDRESS");
-      }
-
-      // 3. Check if sending to self
-      if (recipient.equals(sender)) {
-        throw new Error("SELF_TRANSFER");
-      }
-
-      // 4. Prepare transaction
+      // 3. Prepare transaction
       const connection = new Connection(process.env.SOLANA_RPC);
       const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
 
-      const { blockhash, feeCalculator } =
-        await connection.getRecentBlockhash();
-      const fee = feeCalculator.lamportsPerSignature;
+      // Modern fee calculation
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: sender,
+        toPubkey: recipient,
+        lamports,
+      });
 
-      // 5. Create confirmation embed
+      const { blockhash } = await connection.getLatestBlockhash();
+      const messageV0 = new TransactionMessage({
+        payerKey: sender,
+        recentBlockhash: blockhash,
+        instructions: [transferIx],
+      }).compileToV0Message();
+
+      // Get fee for the message
+      const fee = await connection.getFeeForMessage(messageV0);
+      if (fee.value === null) throw new Error("FEE_CALCULATION_FAILED");
+
+      // 4. Create confirmation
       const confirmEmbed = new EmbedBuilder()
         .setTitle("⚠️ Confirm Transaction")
         .addFields(
+          { name: "From", value: `\`${sender.toString().slice(0, 8)}...\`` },
+          { name: "To", value: `\`${recipient.toString().slice(0, 8)}...\`` },
+          { name: "Amount", value: `◎${solAmount.toFixed(4)}` },
           {
-            name: "From",
-            value: `\`${sender.toString().slice(0, 8)}...\``,
-            inline: true,
-          },
-          {
-            name: "To",
-            value: `\`${recipient.toString().slice(0, 8)}...\``,
-            inline: true,
-          },
-          { name: "Amount", value: `◎${solAmount.toFixed(4)}`, inline: true },
-          {
-            name: "Network Fee",
-            value: `◎${(fee / LAMPORTS_PER_SOL).toFixed(4)}`,
-            inline: true,
+            name: "Estimated Fee",
+            value: `◎${(fee.value / LAMPORTS_PER_SOL).toFixed(4)}`,
           }
         )
         .setColor(0xf5a623);
 
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId("confirmBundle")
+          .setCustomId(`confirmBundle_${Date.now()}`) // Unique ID to prevent collisions
           .setLabel("Confirm")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
@@ -151,19 +137,20 @@ module.exports = {
         components: [confirmRow],
       });
     } catch (error) {
-      console.error("Transaction Setup Error:", error.message);
+      console.error("Transaction Setup Error:", error);
 
-      const errorMessages = {
-        INVALID_ADDRESS: `❌ Invalid Solana address provided`,
-        INVALID_AMOUNT: `❌ Please enter a valid number for amount`,
+      const errorMap = {
+        INVALID_ADDRESS: "❌ Invalid Solana address",
+        INVALID_AMOUNT: "❌ Enter a valid SOL amount",
         AMOUNT_TOO_SMALL: `❌ Minimum transfer is ◎${MIN_SOL_AMOUNT}`,
         AMOUNT_TOO_LARGE: `❌ Maximum transfer is ◎${MAX_SOL_AMOUNT}`,
-        SELF_TRANSFER: `❌ Cannot send to yourself`,
-        DEFAULT: `⚠️ Transaction failed: ${error.message}`,
+        SELF_TRANSFER: "❌ Cannot send to yourself",
+        FEE_CALCULATION_FAILED: "⚠️ Failed to calculate network fee",
+        DEFAULT: "⚠️ Transaction setup failed",
       };
 
       await interaction.editReply({
-        content: errorMessages[error.message] || errorMessages["DEFAULT"],
+        content: errorMap[error.message] || errorMap["DEFAULT"],
         components: [],
       });
     }
@@ -173,15 +160,47 @@ module.exports = {
     try {
       await interaction.deferUpdate();
 
-      // Add your actual transaction signing and submission logic here
-      // This would involve:
-      // 1. Getting the transaction details
-      // 2. Signing with the user's wallet
-      // 3. Sending to the network
-      // 4. Reporting status
+      // Extract original data from embed
+      const embed = interaction.message.embeds[0];
+      const [sender, recipient, amountStr, feeStr] = embed.fields.map(
+        (f) => f.value
+      );
 
+      const amount = parseFloat(amountStr.replace("◎", ""));
+      const fee = parseFloat(feeStr.replace("◎", ""));
+      const lamports = Math.floor(amount * LAMPORTS_PER_SOL);
+
+      // Reconstruct transaction
+      const connection = new Connection(process.env.SOLANA_RPC);
+      const senderKey = new PublicKey(sender.match(/`(\w+)\.\.\.`/)[1]);
+      const recipientKey = new PublicKey(recipient.match(/`(\w+)\.\.\.`/)[1]);
+
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: senderKey,
+        toPubkey: recipientKey,
+        lamports,
+      });
+
+      const { blockhash } = await connection.getLatestBlockhash();
+      const message = new TransactionMessage({
+        payerKey: senderKey,
+        recentBlockhash: blockhash,
+        instructions: [transferIx],
+      }).compileToV0Message();
+
+      const transaction = new VersionedTransaction(message);
+
+      // Here you would:
+      // 1. Get user's wallet (from your DB)
+      // 2. Sign the transaction
+      // 3. Send it to the network
+      // Example:
+      // const signedTx = await wallet.signTransaction(transaction);
+      // const signature = await connection.sendTransaction(signedTx);
+
+      // For now, we'll simulate success
       await interaction.editReply({
-        content: "✅ Transaction submitted successfully!",
+        content: `✅ Simulated success! (Real implementation would sign & send)`,
         embeds: [],
         components: [],
       });
