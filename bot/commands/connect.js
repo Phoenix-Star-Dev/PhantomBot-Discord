@@ -1,26 +1,36 @@
 const { getWallet } = require("../../db");
-const PHANTOM_BASE_URL = "https://phantom.app/ul/v1/connect";
+const { publicKey: dappEncryptionPublicKey } = require("../../phantomKeyPair");
+const querystring = require("querystring");
+
+const APP_URL = process.env.SERVER_URL; // Your app metadata URL (can be your website)
+const PHANTOM_CONNECT_BASE = "https://phantom.app/ul/v1/connect";
 
 module.exports = {
   async execute(interaction) {
     const discordId = interaction.user.id;
-    const publicKey = await getWallet(discordId);
+    const existingPublicKey = await getWallet(discordId);
 
-    if (publicKey) {
+    if (existingPublicKey) {
       await interaction.reply({
-        content: `🔗 You’re already connected: \`${publicKey}\``,
+        content: `🔗 You're already connected with wallet: \`${existingPublicKey}\``,
         ephemeral: true,
       });
-    } else {
-      const callbackUrl = encodeURIComponent(
-        process.env.PHANTOM_CALLBACK_URL + "?discord_id=" + discordId
-      );
-      const deepLink = `${PHANTOM_BASE_URL}?redirect=${callbackUrl}`;
-
-      await interaction.reply({
-        content: `🔗 Connect your Phantom Wallet: [Connect Wallet](${deepLink})`,
-        ephemeral: true,
-      });
+      return;
     }
+
+    // Build the query parameters according to Phantom docs:
+    const query = {
+      app_url: APP_URL,
+      dapp_encryption_public_key: dappEncryptionPublicKey,
+      redirect_link: `${process.env.PHANTOM_CALLBACK_URL}?discord_id=${discordId}`,
+      cluster: "mainnet-beta", // or 'devnet', 'testnet'
+    };
+
+    const deepLink = `${PHANTOM_CONNECT_BASE}?${querystring.stringify(query)}`;
+
+    await interaction.reply({
+      content: `🔗 Connect your Phantom Wallet: [Connect Wallet](${deepLink})`,
+      ephemeral: true,
+    });
   },
 };

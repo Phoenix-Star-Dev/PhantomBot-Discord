@@ -7,20 +7,14 @@ const supabase = createClient(
 );
 
 async function saveWallet(discordId, publicKey) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("users")
     .upsert(
       { discord_id: discordId, public_key: publicKey },
       { onConflict: "discord_id" }
     );
 
-  if (error) {
-    console.error("❌ Supabase error:", error);
-    throw error;
-  }
-
-  console.log(`🔑 Saved wallet for Discord ID ${discordId}`);
-  return data;
+  if (error) throw error;
 }
 
 async function getWallet(discordId) {
@@ -30,10 +24,7 @@ async function getWallet(discordId) {
     .eq("discord_id", discordId)
     .single();
 
-  if (error && error.code !== "PGRST116") {
-    console.error("❌ Supabase error:", error);
-    throw error;
-  }
+  if (error && error.code !== "PGRST116") throw error;
 
   return data ? data.public_key : null;
 }

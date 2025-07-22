@@ -6,6 +6,8 @@ const path = require("path");
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
+client.login(process.env.DISCORD_TOKEN);
+
 (async () => {
   try {
     console.log("Registering slash commands...");
@@ -45,5 +47,3 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 });
-
-client.login(process.env.DISCORD_TOKEN);
