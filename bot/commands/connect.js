@@ -1,4 +1,5 @@
 const { getWallet } = require("../../db");
+const PHANTOM_BASE_URL = "https://phantom.app/ul/v1/connect";
 
 module.exports = {
   async execute(interaction) {
@@ -6,12 +7,15 @@ module.exports = {
     const publicKey = await getWallet(discordId);
 
     if (publicKey) {
-      await interaction.reply(`🔗 You’re already connected: \`${publicKey}\``);
+      await interaction.reply({
+        content: `🔗 You’re already connected: \`${publicKey}\``,
+        ephemeral: true,
+      });
     } else {
       const callbackUrl = encodeURIComponent(
-        `https://your-server.com/phantom/callback?discord_id=${discordId}`
+        process.env.PHANTOM_CALLBACK_URL + "?discord_id=" + discordId
       );
-      const deepLink = `https://phantom.app/ul/v1/connect?redirect=${callbackUrl}`;
+      const deepLink = `${PHANTOM_BASE_URL}?redirect=${callbackUrl}`;
 
       await interaction.reply({
         content: `🔗 Connect your Phantom Wallet: [Connect Wallet](${deepLink})`,

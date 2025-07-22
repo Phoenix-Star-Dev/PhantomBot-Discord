@@ -1,3 +1,5 @@
+const { previewBundle } = require("../../solana/preview");
+
 module.exports = {
   async execute(interaction) {
     await interaction.reply(

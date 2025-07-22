@@ -31,7 +31,6 @@ async function getWallet(discordId) {
     .single();
 
   if (error && error.code !== "PGRST116") {
-    // Ignore "no rows found"
     console.error("❌ Supabase error:", error);
     throw error;
   }

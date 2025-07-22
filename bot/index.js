@@ -1,11 +1,11 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, REST, Routes } = require("discord.js");
-const commands = require("./commands");
+const commands = require("./commands/index");
+const path = require("path");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// Register slash commands
 (async () => {
   try {
     console.log("Registering slash commands...");
@@ -16,28 +16,31 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
       ),
       { body: commands }
     );
-    console.log("Slash commands registered.");
+    console.log("Slash commands registered!");
   } catch (err) {
     console.error(err);
   }
 })();
 
 client.once("ready", () => {
-  console.log(`🤖 Bot logged in as ${client.user.tag}`);
+  console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  const { commandName } = interaction;
-
+  const commandName = interaction.commandName;
   try {
-    const handler = require(`./commands/${commandName}`);
-    await handler.execute(interaction);
-  } catch (err) {
-    console.error(err);
+    const command = require(path.resolve(
+      __dirname,
+      "commands",
+      `${commandName}.js`
+    ));
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
     await interaction.reply({
-      content: "⚠️ Error handling command",
+      content: "⚠️ There was an error executing this command.",
       ephemeral: true,
     });
   }
