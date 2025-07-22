@@ -1,6 +1,11 @@
-const { Connection, Transaction, SystemProgram } = require("@solana/web3.js");
+const {
+  Connection,
+  Transaction,
+  SystemProgram,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} = require("@solana/web3.js");
 const { getWallet } = require("../../db");
-const LAMPORTS_PER_SOL = 1000000000;
 
 module.exports = {
   async execute(interaction) {
@@ -14,27 +19,36 @@ module.exports = {
       });
     }
 
-    // Example: Create a simple SOL transfer transaction
-    const connection = new Connection(process.env.SOLANA_RPC);
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: new PublicKey(userPublicKey),
-        toPubkey: new PublicKey("RECIPIENT_PUBLIC_KEY"), // Replace with actual recipient
-        lamports: 1000000, // 0.001 SOL
-      })
-    );
+    try {
+      const connection = new Connection(process.env.SOLANA_RPC);
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: new PublicKey(userPublicKey),
+          toPubkey: new PublicKey("RECIPIENT_PUBLIC_KEY"), // Replace with actual recipient
+          lamports: 1000000, // 0.001 SOL
+        })
+      );
 
-    // Get recent blockhash and fee
-    const { blockhash, feeCalculator } = await connection.getRecentBlockhash();
-    transaction.recentBlockhash = blockhash;
-    const fee = feeCalculator.lamportsPerSignature;
+      const { blockhash, feeCalculator } =
+        await connection.getRecentBlockhash();
+      transaction.recentBlockhash = blockhash;
+      const fee = feeCalculator.lamportsPerSignature;
 
-    await interaction.reply({
-      content: `📦 Created transaction bundle:
+      await interaction.reply({
+        content: `📦 Created transaction bundle:
 - From: \`${userPublicKey}\`
-- Network Fee: ◎${fee / LAMPORTS_PER_SOL}
+- To: \`RECIPIENT_PUBLIC_KEY\`
+- Amount: ◎${(1000000 / LAMPORTS_PER_SOL).toFixed(4)}
+- Network Fee: ◎${(fee / LAMPORTS_PER_SOL).toFixed(4)}
 - Status: Ready to sign`,
-      ephemeral: true,
-    });
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({
+        content: "⚠️ Failed to create transaction bundle",
+        ephemeral: true,
+      });
+    }
   },
 };

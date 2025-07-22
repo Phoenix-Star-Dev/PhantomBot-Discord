@@ -13,21 +13,36 @@ module.exports = {
       });
     }
 
-    // Example: Check transaction history
-    const connection = new Connection(process.env.SOLANA_RPC);
-    const signatures = await connection.getConfirmedSignaturesForAddress2(
-      new PublicKey(userPublicKey),
-      { limit: 5 }
-    );
+    try {
+      const connection = new Connection(process.env.SOLANA_RPC);
+      const signatures = await connection.getConfirmedSignaturesForAddress2(
+        new PublicKey(userPublicKey),
+        { limit: 3 }
+      );
 
-    const statusMessage =
-      signatures
-        .map((sig) => `- TX: \`${sig.signature}\` (Slot: ${sig.slot})`)
-        .join("\n") || "No recent transactions found";
+      const statusMessage =
+        signatures.length > 0
+          ? signatures
+              .map(
+                (sig, i) =>
+                  `${i + 1}. [${sig.signature.slice(0, 6)}...] (Slot: ${
+                    sig.slot
+                  })`
+              )
+              .join("\n")
+          : "No recent transactions found";
 
-    await interaction.reply({
-      content: `⏳ Transaction History for \`${userPublicKey}\`:\n${statusMessage}`,
-      ephemeral: true,
-    });
+      await interaction.reply({
+        content: `⏳ Transaction Status for \`${userPublicKey.slice(0, 6)}...\`:
+${statusMessage}`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({
+        content: "⚠️ Failed to fetch transaction history",
+        ephemeral: true,
+      });
+    }
   },
 };

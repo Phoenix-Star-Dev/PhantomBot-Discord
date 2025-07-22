@@ -1,6 +1,6 @@
-const { Connection, PublicKey } = require("@solana/web3.js");
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 const { getWallet } = require("../../db");
-const LAMPORTS_PER_SOL = 1000000000;
+
 module.exports = {
   async execute(interaction) {
     const discordId = interaction.user.id;
@@ -13,18 +13,26 @@ module.exports = {
       });
     }
 
-    // Example: Fetch account info
-    const connection = new Connection(process.env.SOLANA_RPC);
-    const accountInfo = await connection.getAccountInfo(
-      new PublicKey(userPublicKey)
-    );
+    try {
+      const connection = new Connection(process.env.SOLANA_RPC);
+      const publicKey = new PublicKey(userPublicKey);
+      const balance = await connection.getBalance(publicKey);
+      const accountInfo = await connection.getAccountInfo(publicKey);
 
-    await interaction.reply({
-      content: `🖼 Transaction Preview:
-- Your Wallet: \`${userPublicKey}\`
-- Balance: ◎${accountInfo.lamports / LAMPORTS_PER_SOL}
-- Last Activity: ${new Date(accountInfo.rentEpoch * 1000).toLocaleString()}`,
-      ephemeral: true,
-    });
+      await interaction.reply({
+        content: `🖼 Wallet Preview:
+- Address: \`${userPublicKey}\`
+- Balance: ◎${(balance / LAMPORTS_PER_SOL).toFixed(4)}
+- Executable: ${accountInfo?.executable ? "Yes" : "No"}
+- Owner: \`${accountInfo?.owner.toString()}\``,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({
+        content: "⚠️ Failed to fetch wallet info",
+        ephemeral: true,
+      });
+    }
   },
 };
