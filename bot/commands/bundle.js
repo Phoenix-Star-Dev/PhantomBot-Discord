@@ -18,9 +18,9 @@ module.exports = {
       const solAmount = interaction.options.getNumber("amount");
 
       // Validate amount
-      if (solAmount <= 0) {
-        return interaction.editReply("❌ Amount must be greater than 0");
-      }
+      //   if (solAmount <= 0) {
+      //     return interaction.editReply("❌ Amount must be greater than 0");
+      //   }
 
       // Convert to lamports
       const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
