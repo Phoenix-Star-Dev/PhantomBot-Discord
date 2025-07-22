@@ -43,6 +43,7 @@ client.on("interactionCreate", async (interaction) => {
     // Handle modal submissions FIRST
     if (interaction.type === InteractionType.ModalSubmit) {
       if (interaction.customId === "bundleModal") {
+        console.log(interaction);
         require("./commands/bundle").handleModal(interaction);
       }
       return;
