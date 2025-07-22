@@ -62,69 +62,63 @@ app.listen(PORT, () => {
 });
 
 // Add this after your existing routes
-app.get("/phantom/connect-page", (req, res) => {
+app.get("/phantom/auto-connect", (req, res) => {
   const discordId = req.query.discord_id;
 
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Connect Phantom Wallet</title>
       <script src="https://unpkg.com/@solana/web3.js@1.70.1/lib/index.iife.js"></script>
-    </head>
-    <body>
-      <h1>Connect Phantom Wallet</h1>
-      <button id="connectButton">Connect Wallet</button>
       <script>
-        async function connectWallet() {
+        async function autoConnect() {
           try {
-            if ("solana" in window) {
-              const provider = window.solana;
+            if (window.solana && window.solana.isPhantom) {
+              // Auto-connect
+              const response = await window.solana.connect();
+              const publicKey = response.publicKey.toString();
               
-              // Connect to wallet
-              await provider.connect();
-              const publicKey = provider.publicKey.toString();
-              
-              // Send data to server
-              await fetch('/phantom/desktop-callback', {
+              // Send to server
+              await fetch('/phantom/handle-connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  discord_id: '${discordId}', 
-                  public_key: publicKey 
-                }),
+                body: JSON.stringify({
+                  discord_id: '${discordId}',
+                  public_key: publicKey
+                })
               });
               
-              alert("Wallet connected successfully! Return to Discord.");
+              // Close window after 1 second
+              setTimeout(() => window.close(), 1000);
             } else {
-              alert("Please install Phantom Wallet!");
+              alert('Phantom not detected');
+              window.close();
             }
           } catch (error) {
             console.error(error);
-            alert("Connection failed: " + error.message);
+            window.close();
           }
         }
         
-        document.getElementById('connectButton').addEventListener('click', connectWallet);
+        // Run immediately on load
+        window.onload = autoConnect;
       </script>
+    </head>
+    <body>
+      <p>Connecting wallet...</p>
     </body>
     </html>
     `);
 });
 
-// Add this endpoint to handle desktop connections
-app.post("/phantom/desktop-callback", express.json(), async (req, res) => {
+app.post("/phantom/handle-connect", express.json(), async (req, res) => {
   const { discord_id, public_key } = req.body;
-
-  if (!discord_id || !public_key) {
-    return res.status(400).send("Missing parameters");
-  }
 
   try {
     await saveWallet(discord_id, public_key);
-    res.send("✅ Wallet connected successfully!");
+    res.status(200).send();
   } catch (error) {
-    console.error("Error saving wallet:", error);
-    res.status(500).send("Failed to save wallet");
+    console.error(error);
+    res.status(500).send();
   }
 });
