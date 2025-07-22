@@ -1,10 +1,10 @@
-// phantomKeyPair.js
 const nacl = require("tweetnacl");
-const bs58 = require("bs58");
+const { PublicKey } = require("@solana/web3.js");
 
 const keyPair = nacl.box.keyPair();
 
-const publicKey = bs58.encode(keyPair.publicKey);
+// Create a PublicKey instance and convert to base58
+const publicKey = new PublicKey(keyPair.publicKey).toString();
 const secretKey = keyPair.secretKey;
 
 module.exports = {
