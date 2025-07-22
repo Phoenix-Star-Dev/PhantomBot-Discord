@@ -56,3 +56,25 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 });
+
+client.on("interactionCreate", async (interaction) => {
+  if (interaction.isModalSubmit() && interaction.customId === "bundleModal") {
+    require("./commands/bundle").handleModal(interaction);
+  }
+
+  if (interaction.isButton()) {
+    if (interaction.customId === "confirmBundle") {
+      // Handle transaction confirmation
+      await interaction.update({
+        content: "✅ Transaction submitted!",
+        components: [],
+      });
+      // Add your transaction signing logic here
+    } else if (interaction.customId === "cancelBundle") {
+      await interaction.update({
+        content: "❌ Transaction cancelled",
+        components: [],
+      });
+    }
+  }
+});

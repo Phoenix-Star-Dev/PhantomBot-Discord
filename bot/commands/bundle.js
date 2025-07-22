@@ -5,69 +5,70 @@ const {
   PublicKey,
   LAMPORTS_PER_SOL,
 } = require("@solana/web3.js");
-const { MessageFlags } = require("discord.js");
 const { getWallet } = require("../../db");
 
 module.exports = {
   async execute(interaction) {
+    // Defer reply to avoid timeout
+    await interaction.deferReply({ ephemeral: true });
+
     try {
-      // Defer first to avoid timeout
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // Get user inputs
+      const recipientAddress = interaction.options.getString("recipient");
+      const solAmount = interaction.options.getNumber("amount");
 
-      const discordId = interaction.user.id;
-      const walletAddress = await getWallet(discordId);
-
-      if (!walletAddress) {
-        return interaction.editReply({
-          content: "❌ Connect your wallet first with `/connect`",
-        });
+      // Validate amount
+      if (solAmount <= 0) {
+        return interaction.editReply("❌ Amount must be greater than 0");
       }
 
-      // Validate public key
-      let senderPublicKey;
+      // Convert to lamports
+      const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+
+      // Validate recipient address
+      let recipientPublicKey;
       try {
-        senderPublicKey = new PublicKey(walletAddress);
+        recipientPublicKey = new PublicKey(recipientAddress);
       } catch (e) {
-        return interaction.editReply({
-          content: "❌ Invalid wallet format. Please reconnect with `/connect`",
-        });
+        return interaction.editReply("❌ Invalid recipient address");
       }
 
-      const connection = new Connection(process.env.SOLANA_RPC);
-      const recipient = new PublicKey("RECIPIENT_PUBLIC_KEY_HERE"); // Replace with actual
+      // Get sender's wallet from DB
+      const senderAddress = await getWallet(interaction.user.id);
+      if (!senderAddress) {
+        return interaction.editReply(
+          "❌ Connect your wallet first with `/connect`"
+        );
+      }
+      const senderPublicKey = new PublicKey(senderAddress);
 
       // Create transaction
+      const connection = new Connection(process.env.SOLANA_RPC);
       const transaction = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: senderPublicKey,
-          toPubkey: recipient,
-          lamports: 1000000, // 0.001 SOL
+          toPubkey: recipientPublicKey,
+          lamports: lamports,
         })
       );
 
-      // Get recent blockhash
+      // Get fee estimate
       const { blockhash, feeCalculator } =
         await connection.getRecentBlockhash();
       transaction.recentBlockhash = blockhash;
       const fee = feeCalculator.lamportsPerSignature;
 
-      // Format response
+      // Send confirmation
       await interaction.editReply({
-        content: `📦 Transaction Bundle Created:
-• From: \`${senderPublicKey}\`
-• To: \`${recipient}\`
-• Amount: ◎${(1000000 / LAMPORTS_PER_SOL).toFixed(4)}
-• Fee: ◎${(fee / LAMPORTS_PER_SOL).toFixed(4)}`,
+        content: `📦 Transaction Bundle Ready:
+• From: \`${senderPublicKey.toString().slice(0, 8)}...\`
+• To: \`${recipientPublicKey.toString().slice(0, 8)}...\`
+• Amount: ◎${solAmount.toFixed(4)}
+• Estimated Fee: ◎${(fee / LAMPORTS_PER_SOL).toFixed(4)}`,
       });
     } catch (error) {
-      console.error("Bundle Command Error:", error);
-      try {
-        await interaction.editReply({
-          content: "⚠️ Failed to create transaction bundle",
-        });
-      } catch (editError) {
-        console.error("Failed to send error:", editError);
-      }
+      console.error("Bundle Error:", error);
+      await interaction.editReply("⚠️ Failed to create transaction bundle");
     }
   },
 };
