@@ -1,25 +1,39 @@
-const { createBundle, sendBundle } = require("../../solana/bundler");
+const { Connection, Transaction, SystemProgram } = require("@solana/web3.js");
 const { getWallet } = require("../../db");
 
 module.exports = {
   async execute(interaction) {
-    // For demo: Assume we bundle a simple SOL transfer or NFT mint (later: parse user input)
     const discordId = interaction.user.id;
     const userPublicKey = await getWallet(discordId);
 
     if (!userPublicKey) {
-      return await interaction.reply({
-        content: "❌ You need to /connect your Phantom wallet first.",
+      return interaction.reply({
+        content: "❌ Connect your wallet first with `/connect`",
         ephemeral: true,
       });
     }
 
-    await interaction.reply("📦 Bundling your transactions (demo)...");
+    // Example: Create a simple SOL transfer transaction
+    const connection = new Connection(process.env.SOLANA_RPC);
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: new PublicKey(userPublicKey),
+        toPubkey: new PublicKey("RECIPIENT_PUBLIC_KEY"), // Replace with actual recipient
+        lamports: 1000000, // 0.001 SOL
+      })
+    );
 
-    // TODO: Build transactions array here (NFT mint or SPL transfer)
-    // For now, just simulate success
-    setTimeout(() => {
-      interaction.followUp("✅ Bundle sent successfully! (demo)");
-    }, 3000);
+    // Get recent blockhash and fee
+    const { blockhash, feeCalculator } = await connection.getRecentBlockhash();
+    transaction.recentBlockhash = blockhash;
+    const fee = feeCalculator.lamportsPerSignature;
+
+    await interaction.reply({
+      content: `📦 Created transaction bundle:
+- From: \`${userPublicKey}\`
+- Network Fee: ◎${fee / LAMPORTS_PER_SOL}
+- Status: Ready to sign`,
+      ephemeral: true,
+    });
   },
 };
