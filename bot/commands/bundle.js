@@ -3,41 +3,41 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
+const { PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+const { getWallet } = require("../../db");
 
 module.exports = {
   async execute(interaction) {
     try {
-      // Create the modal
       const modal = new ModalBuilder()
         .setCustomId("bundleModal")
         .setTitle("Create Transaction Bundle");
 
-      // Add components to modal
+      // Recipient field (note the custom ID)
       const recipientInput = new TextInputBuilder()
-        .setCustomId("recipientInput")
+        .setCustomId("recipientAddress") // Changed to match handler
         .setLabel("Recipient Solana Address")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setMaxLength(44);
 
+      // Amount field (note the custom ID)
       const amountInput = new TextInputBuilder()
-        .setCustomId("amountInput")
+        .setCustomId("solAmount") // Changed to match handler
         .setLabel("Amount (SOL)")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setPlaceholder("0.1");
 
-      // Combine components into action rows
       const firstActionRow = new ActionRowBuilder().addComponents(
         recipientInput
       );
       const secondActionRow = new ActionRowBuilder().addComponents(amountInput);
 
-      // Add action rows to modal
       modal.addComponents(firstActionRow, secondActionRow);
-
-      // Show the modal
       await interaction.showModal(modal);
     } catch (error) {
       console.error("Modal error:", error);
@@ -48,26 +48,24 @@ module.exports = {
     }
   },
 
-  // This handles the modal submission
   async handleModal(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
-    // 1. Get form values
-    const recipientAddress =
-      interaction.fields.getTextInputValue("recipientAddress");
-    const solAmount = parseFloat(
-      interaction.fields.getTextInputValue("solAmount")
-    );
-
     try {
-      // 2. Validate inputs
-      const recipient = new PublicKey(recipientAddress); // Validates address
+      // Now these match the modal's custom IDs
+      const recipientAddress =
+        interaction.fields.getTextInputValue("recipientAddress");
+      const solAmount = parseFloat(
+        interaction.fields.getTextInputValue("solAmount")
+      );
+
+      // Rest of your validation logic...
+      const recipient = new PublicKey(recipientAddress);
       if (isNaN(solAmount)) throw new Error("Invalid amount");
 
       const lamports = solAmount * LAMPORTS_PER_SOL;
       const sender = new PublicKey(await getWallet(interaction.user.id));
 
-      // 3. Create confirmation message with buttons
       const confirmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("confirmBundle")
