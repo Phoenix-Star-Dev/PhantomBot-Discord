@@ -1,74 +1,98 @@
 const {
-  Connection,
-  Transaction,
-  SystemProgram,
-  PublicKey,
-  LAMPORTS_PER_SOL,
-} = require("@solana/web3.js");
-const { getWallet } = require("../../db");
+  ActionRowBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} = require("discord.js");
 
 module.exports = {
   async execute(interaction) {
-    // Defer reply to avoid timeout
+    try {
+      // Create the modal
+      const modal = new ModalBuilder()
+        .setCustomId("bundleModal")
+        .setTitle("Create Transaction Bundle");
+
+      // Add components to modal
+      const recipientInput = new TextInputBuilder()
+        .setCustomId("recipientInput")
+        .setLabel("Recipient Solana Address")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(44);
+
+      const amountInput = new TextInputBuilder()
+        .setCustomId("amountInput")
+        .setLabel("Amount (SOL)")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder("0.1");
+
+      // Combine components into action rows
+      const firstActionRow = new ActionRowBuilder().addComponents(
+        recipientInput
+      );
+      const secondActionRow = new ActionRowBuilder().addComponents(amountInput);
+
+      // Add action rows to modal
+      modal.addComponents(firstActionRow, secondActionRow);
+
+      // Show the modal
+      await interaction.showModal(modal);
+    } catch (error) {
+      console.error("Modal error:", error);
+      await interaction.reply({
+        content: "Failed to open transaction form",
+        ephemeral: true,
+      });
+    }
+  },
+
+  // This handles the modal submission
+  async handleModal(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
+    // 1. Get form values
+    const recipientAddress =
+      interaction.fields.getTextInputValue("recipientAddress");
+    const solAmount = parseFloat(
+      interaction.fields.getTextInputValue("solAmount")
+    );
+
     try {
-      // Get user inputs
-      const recipientAddress = interaction.options.getString("recipient");
-      const solAmount = interaction.options.getNumber("amount");
+      // 2. Validate inputs
+      const recipient = new PublicKey(recipientAddress); // Validates address
+      if (isNaN(solAmount)) throw new Error("Invalid amount");
 
-      // Validate amount
-      //   if (solAmount <= 0) {
-      //     return interaction.editReply("❌ Amount must be greater than 0");
-      //   }
+      const lamports = solAmount * LAMPORTS_PER_SOL;
+      const sender = new PublicKey(await getWallet(interaction.user.id));
 
-      // Convert to lamports
-      const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
-
-      // Validate recipient address
-      let recipientPublicKey;
-      try {
-        recipientPublicKey = new PublicKey(recipientAddress);
-      } catch (e) {
-        return interaction.editReply("❌ Invalid recipient address");
-      }
-
-      // Get sender's wallet from DB
-      const senderAddress = await getWallet(interaction.user.id);
-      if (!senderAddress) {
-        return interaction.editReply(
-          "❌ Connect your wallet first with `/connect`"
-        );
-      }
-      const senderPublicKey = new PublicKey(senderAddress);
-
-      // Create transaction
-      const connection = new Connection(process.env.SOLANA_RPC);
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: senderPublicKey,
-          toPubkey: recipientPublicKey,
-          lamports: lamports,
-        })
+      // 3. Create confirmation message with buttons
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("confirmBundle")
+          .setLabel("Confirm")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("cancelBundle")
+          .setLabel("Cancel")
+          .setStyle(ButtonStyle.Danger)
       );
 
-      // Get fee estimate
-      const { blockhash, feeCalculator } =
-        await connection.getRecentBlockhash();
-      transaction.recentBlockhash = blockhash;
-      const fee = feeCalculator.lamportsPerSignature;
-
-      // Send confirmation
       await interaction.editReply({
-        content: `📦 Transaction Bundle Ready:
-• From: \`${senderPublicKey.toString().slice(0, 8)}...\`
-• To: \`${recipientPublicKey.toString().slice(0, 8)}...\`
-• Amount: ◎${solAmount.toFixed(4)}
-• Estimated Fee: ◎${(fee / LAMPORTS_PER_SOL).toFixed(4)}`,
+        content: `⚠️ Confirm sending ◎${solAmount} to \`${recipient
+          .toString()
+          .slice(0, 8)}...\``,
+        components: [confirmRow],
       });
     } catch (error) {
-      console.error("Bundle Error:", error);
-      await interaction.editReply("⚠️ Failed to create transaction bundle");
+      await interaction.editReply({
+        content: `❌ Error: ${
+          error.message.includes("invalid public key")
+            ? "Invalid wallet address"
+            : "Please enter a valid amount"
+        }`,
+      });
     }
   },
 };

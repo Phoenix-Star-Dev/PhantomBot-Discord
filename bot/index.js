@@ -1,13 +1,22 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, REST, Routes } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  InteractionType,
+  ButtonStyle,
+} = require("discord.js");
 const commands = require("./commands/index");
 const path = require("path");
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+});
+
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-client.login(process.env.DISCORD_TOKEN);
-
+// Register commands
 (async () => {
   try {
     console.log("Registering slash commands...");
@@ -20,7 +29,7 @@ client.login(process.env.DISCORD_TOKEN);
     );
     console.log("Slash commands registered!");
   } catch (err) {
-    console.error(err);
+    console.error("Command registration error:", err);
   }
 })();
 
@@ -28,53 +37,34 @@ client.once("ready", () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
-// In your main bot index.js
+// Enhanced interaction handler
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) return;
-
-  if (interaction.isModalSubmit() && interaction.customId === "bundleModal") {
-    require("./commands/bundle").handleModal(interaction);
-  }
-
-  if (interaction.isButton()) {
-    if (interaction.customId === "confirmBundle") {
-      // Handle transaction confirmation
-      await interaction.update({
-        content: "✅ Transaction submitted!",
-        components: [],
-      });
-      // Add your transaction signing logic here
-    } else if (interaction.customId === "cancelBundle") {
-      await interaction.update({
-        content: "❌ Transaction cancelled",
-        components: [],
-      });
-    }
-  }
-
   try {
-    const command = require(`./commands/${interaction.commandName}.js`);
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-
-    // Check if already replied
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: "⚠️ There was an error executing this command.",
-        ephemeral: true,
-      });
-    } else {
-      // If already replied, try editing
-      try {
-        await interaction.editReply({
-          content: "⚠️ There was an error executing this command.",
-        });
-      } catch (editError) {
-        console.error("EditReply failed:", editError);
+    // Handle modal submissions FIRST
+    if (interaction.type === InteractionType.ModalSubmit) {
+      if (interaction.customId === "bundleModal") {
+        require("./commands/bundle").handleModal(interaction);
       }
+      return;
+    }
+
+    // Then handle slash commands
+    if (interaction.isCommand()) {
+      const command = require(`./commands/${interaction.commandName}.js`);
+      await command.execute(interaction);
+      return;
+    }
+  } catch (error) {
+    console.error("Interaction error:", error);
+    if (!interaction.replied) {
+      await interaction
+        .reply({
+          content: "An error occurred",
+          ephemeral: true,
+        })
+        .catch(console.error);
     }
   }
 });
 
-client.on("interactionCreate", async (interaction) => {});
+client.login(process.env.DISCORD_TOKEN);

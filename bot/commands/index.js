@@ -6,6 +6,7 @@ module.exports = [
   {
     name: "bundle",
     description: "Bundle Solana transactions",
+    options: [],
   },
   {
     name: "preview",
