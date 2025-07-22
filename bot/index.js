@@ -32,6 +32,26 @@ client.once("ready", () => {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
+  if (interaction.isModalSubmit() && interaction.customId === "bundleModal") {
+    require("./commands/bundle").handleModal(interaction);
+  }
+
+  if (interaction.isButton()) {
+    if (interaction.customId === "confirmBundle") {
+      // Handle transaction confirmation
+      await interaction.update({
+        content: "✅ Transaction submitted!",
+        components: [],
+      });
+      // Add your transaction signing logic here
+    } else if (interaction.customId === "cancelBundle") {
+      await interaction.update({
+        content: "❌ Transaction cancelled",
+        components: [],
+      });
+    }
+  }
+
   try {
     const command = require(`./commands/${interaction.commandName}.js`);
     await command.execute(interaction);
@@ -57,24 +77,4 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.on("interactionCreate", async (interaction) => {
-  if (interaction.isModalSubmit() && interaction.customId === "bundleModal") {
-    require("./commands/bundle").handleModal(interaction);
-  }
-
-  if (interaction.isButton()) {
-    if (interaction.customId === "confirmBundle") {
-      // Handle transaction confirmation
-      await interaction.update({
-        content: "✅ Transaction submitted!",
-        components: [],
-      });
-      // Add your transaction signing logic here
-    } else if (interaction.customId === "cancelBundle") {
-      await interaction.update({
-        content: "❌ Transaction cancelled",
-        components: [],
-      });
-    }
-  }
-});
+client.on("interactionCreate", async (interaction) => {});
